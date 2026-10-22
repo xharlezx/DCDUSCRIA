@@ -52,7 +52,7 @@
   main { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto 1fr; }
   .top { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }
   #menuBtn { display: none; background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
-  #textView, #voiceView { display: flex; flex-direction: column; min-height: 0; }
+  #textView, #voiceView { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   #msgs { flex: 1; overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
   .msg b { margin-right: 8px; }
   .msg time { color: var(--muted); font-size: .78rem; }
@@ -64,7 +64,7 @@
 
   #voiceCta { margin: auto; text-align: center; display: grid; gap: 12px; justify-items: center; padding: 24px; }
   #voiceCta p { color: var(--muted); margin: 0; max-width: 34ch; }
-  #grid { flex: 1; display: grid; gap: 12px; padding: 14px; overflow: auto; align-content: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+  #grid { flex: 1; min-height: 0; display: grid; gap: 12px; padding: 14px; overflow: auto; align-content: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
   .tile { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 9; }
   .tile.screen { grid-column: span 2; }
   @media (max-width: 760px) { .tile.screen { grid-column: span 1; } }
@@ -73,10 +73,6 @@
   .tile.novideo .avatar { display: grid; }
   .tile.novideo video { visibility: hidden; }
   .tile .name { position: absolute; left: 10px; bottom: 10px; background: rgba(11,19,23,.8); padding: 3px 10px; border-radius: 999px; font-size: .85rem; }
-  #fx { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; align-items: center; }
-  #fx button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
-  #fx button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-  #fx .hint { color: var(--muted); font-size: .85rem; }
 
   @media (max-width: 760px) {
     #app { grid-template-columns: 1fr; }
@@ -84,10 +80,23 @@
     #side.open { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); }
     #menuBtn { display: block; }
   }
-  #sb { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; align-items: center; }
-  #sb button, #sb label { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 14px; cursor: pointer; color: var(--text); font-size: .95rem; transition: transform .1s; }
+  #app main { overflow: hidden; }
+  #grid:has(.tile:only-child) { grid-template-columns: minmax(0, 520px); justify-content: center; }
+  #dock { border-top: 1px solid var(--line); background: var(--side); padding: 10px 14px; }
+  .dockTabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .dockTabs .grow { flex: 1; }
+  .dockTabs button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; transition: border-color .12s; }
+  .dockTabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  #fx, #sb { padding: 12px 0 4px; max-height: 34vh; overflow: auto; }
+  #fx { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #fx button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+  #fx button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  #fx .hint { color: var(--muted); font-size: .85rem; }
+  #sb { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  #sb button, #sb label { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; cursor: pointer; color: var(--text); font-size: .85rem; text-align: center; transition: transform .1s, border-color .12s; }
+  #sb button:hover, #sb label:hover { border-color: var(--accent); }
   #sb button:active { transform: scale(.94); }
-  #sb .hint { color: var(--muted); font-size: .85rem; width: 100%; }
+  #sb .emo { font-size: 1.5rem; line-height: 1.1; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -142,8 +151,16 @@
         <p id="voiceErr" role="alert" style="color:var(--danger)"></p>
       </div>
       <div id="grid" hidden></div>
-      <div id="fx" hidden></div>
-      <div id="sb" hidden><span class="hint">Sons para a call (todo mundo ouve):</span></div>
+      <div id="dock" hidden>
+        <div class="dockTabs">
+          <button data-p="fx" aria-pressed="false">✨ Efeitos</button>
+          <button data-p="sb" aria-pressed="false">🎵 Sons</button>
+          <span class="grow"></span>
+          <button id="sbMute" aria-pressed="false" title="Silenciar os sons da call, os seus e os dos outros (só para você)"></button>
+        </div>
+        <div id="fx" hidden></div>
+        <div id="sb" hidden></div>
+      </div>
     </section>
   </main>
 </div>
@@ -191,6 +208,7 @@ function onMsg(m) {
   else if (m.type === 'signal') handleSignal(m.from, m.data);
   else if (m.type === 'screen') {
     const p = peers[m.from]; if (!p) return;
+    if (m.sb) { p.sbId = m.streamId; if (p.streams[m.streamId]) { removeTile(m.from, m.streamId); attachSb(p, p.streams[m.streamId]); } return; }
     p.screenId = m.streamId; Object.keys(p.tiles).forEach(s => labelTile(m.from, s));
   }
 }
@@ -244,7 +262,7 @@ $('joinVoice').onclick = async () => {
   await getLocalMedia();
   if (!rawStream) $('voiceErr').textContent = 'Sem acesso ao microfone/câmera. Clique no cadeado ao lado do endereço do site, permita o acesso e tente de novo. Você ainda pode entrar só para ouvir e ver.';
   inVoice = true; send({ type: 'voice-join' });
-  $('voiceCta').hidden = true; $('grid').hidden = false; $('fx').hidden = false; $('sb').hidden = false; $('voiceBar').hidden = false; SND.join();
+  $('voiceCta').hidden = true; $('grid').hidden = false; $('dock').hidden = false; $('voiceBar').hidden = false; SND.join();
   addTile('me', localStream.id, localStream, { local: true, label: myName + ' (você)' });
   buildFx();
 };
@@ -258,7 +276,8 @@ async function getLocalMedia() {
   AC = AC || new AudioContext(); mixDest = AC.createMediaStreamDestination(); micGain = AC.createGain(); micGain.connect(mixDest);
   const at = rawStream && rawStream.getAudioTracks()[0];
   if (at) AC.createMediaStreamSource(new MediaStream([at])).connect(micGain);
-  const vt = rawStream ? buildVideo(rawStream) : null;
+  const vt = rawStream ? rawStream.getVideoTracks()[0] || null : null;
+  effectFilter = 'none'; fxTrack = null; sbDest = AC.createMediaStreamDestination();
   localStream = new MediaStream([mixDest.stream.getAudioTracks()[0], vt].filter(Boolean));
   $('micBtn').disabled = !at;
   $('camBtn').disabled = !vt;
@@ -268,9 +287,11 @@ function leaveVoice() {
   if (screenStream) stopShare();
   [localStream, rawStream].forEach(s => s && s.getTracks().forEach(t => t.stop()));
   localStream = rawStream = null; inVoice = false; mixDest = micGain = null; SND.leave();
+  if (fxStop) fxStop(); fxTrack = fxStop = null; sbDest = null;
+  document.querySelectorAll('.dockTabs [data-p]').forEach(x => { x.setAttribute('aria-pressed', 'false'); $(x.dataset.p).hidden = true; });
   Object.keys(peers).forEach(closePeer); $('grid').textContent = '';
   send({ type: 'voice-leave' });
-  $('voiceCta').hidden = false; $('grid').hidden = true; $('fx').hidden = true; $('sb').hidden = true; $('voiceBar').hidden = true;
+  $('voiceCta').hidden = false; $('grid').hidden = true; $('dock').hidden = true; $('voiceBar').hidden = true;
   ['micBtn', 'camBtn'].forEach(id => { $(id).classList.remove('off'); });
 }
 $('leaveBtn').onclick = leaveVoice;
@@ -279,9 +300,10 @@ $('leaveBtn').onclick = leaveVoice;
 function makePeer(id, name) {
   if (peers[id]) return peers[id];
   const pc = new RTCPeerConnection(rtc);
-  const p = peers[id] = { pc, name, polite: myId > id, making: false, ignore: false, screenId: null, screenSenders: [], tiles: {} };
+  const p = peers[id] = { pc, name, polite: myId > id, making: false, ignore: false, screenId: null, screenSenders: [], tiles: {}, streams: {}, sbId: null };
   if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
   else { pc.addTransceiver('audio', { direction: 'recvonly' }); pc.addTransceiver('video', { direction: 'recvonly' }); }
+  if (sbDest) { pc.addTrack(sbDest.stream.getAudioTracks()[0], sbDest.stream); send({ type: 'screen', to: id, sb: true, streamId: sbDest.stream.id }); }
   if (screenStream) { addScreenTo(p); send({ type: 'screen', to: id, streamId: screenStream.id }); }
   pc.onnegotiationneeded = async () => {
     try { p.making = true; await pc.setLocalDescription(); send({ type: 'signal', to: id, data: { description: pc.localDescription } }); }
@@ -291,6 +313,8 @@ function makePeer(id, name) {
   pc.oniceconnectionstatechange = () => { if (pc.iceConnectionState === 'failed') pc.restartIce(); };
   pc.ontrack = ({ streams }) => {
     const s = streams[0]; if (!s) return;
+    p.streams[s.id] = s;
+    if (p.sbId === s.id) return attachSb(p, s);
     addTile(id, s.id, s, {});
     s.onremovetrack = () => { if (!s.getTracks().length) removeTile(id, s.id); else refreshVideoState(id, s.id, s); };
   };
@@ -309,6 +333,7 @@ async function handleSignal(from, data) {
 }
 function closePeer(id) {
   const p = peers[id]; if (!p) return;
+  if (p.sbAudio) { p.sbAudio.srcObject = null; const i = sbAudios.indexOf(p.sbAudio); if (i >= 0) sbAudios.splice(i, 1); }
   Object.keys(p.tiles).forEach(s => removeTile(id, s)); p.pc.close(); delete peers[id];
 }
 
@@ -378,13 +403,26 @@ function stopShare() {
 // ---------- efeitos de câmera ----------
 const EFFECTS = { Normal: 'none', 'Preto e branco': 'grayscale(1)', Sépia: 'sepia(1)', Desfoque: 'blur(6px)', Brilho: 'brightness(1.35)', Contraste: 'contrast(1.5)', Vívido: 'saturate(1.8) contrast(1.1)', Invertido: 'invert(1)' };
 const fxOk = 'filter' in CanvasRenderingContext2D.prototype && !!HTMLCanvasElement.prototype.captureStream;
-function buildVideo(raw) {
-  const vt = raw.getVideoTracks()[0]; if (!vt || !fxOk) return vt || null;
-  const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([vt]); v.play();
-  const c = document.createElement('canvas'), ctx = c.getContext('2d'), st = vt.getSettings();
+// A câmera vai direto (sem processar). O canvas só entra quando há um efeito ligado.
+let fxTrack = null, fxStop = null, sbDest = null;
+function ensureFxTrack() {
+  if (fxTrack) return fxTrack;
+  const raw = rawStream.getVideoTracks()[0];
+  const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([raw]); v.play();
+  const c = document.createElement('canvas'), ctx = c.getContext('2d'), st = raw.getSettings();
   c.width = st.width || 1280; c.height = st.height || 720;
-  const timer = setInterval(() => { if (!inVoice) return clearInterval(timer); if (v.readyState >= 2) { ctx.filter = effectFilter; ctx.drawImage(v, 0, 0, c.width, c.height); } }, 33);
-  return c.captureStream(30).getVideoTracks()[0];
+  const w = new Worker(URL.createObjectURL(new Blob(['setInterval(()=>postMessage(0),33)']))); // relógio que o navegador não pausa em segundo plano
+  w.onmessage = () => { if (v.readyState >= 2) { ctx.filter = effectFilter; ctx.drawImage(v, 0, 0, c.width, c.height); } };
+  fxStop = () => w.terminate();
+  return (fxTrack = c.captureStream(30).getVideoTracks()[0]);
+}
+function setEffect(css) {
+  effectFilter = css;
+  const raw = rawStream && rawStream.getVideoTracks()[0]; if (!raw) return;
+  const want = css === 'none' ? raw : ensureFxTrack(), cur = localStream.getVideoTracks()[0];
+  if (!cur || cur === want) return;
+  want.enabled = cur.enabled; localStream.removeTrack(cur); localStream.addTrack(want);
+  Object.values(peers).forEach(p => { const sn = p.pc.getSenders().find(x => x.track === cur); if (sn) sn.replaceTrack(want); });
 }
 function buildFx() {
   const box = $('fx'); box.textContent = '';
@@ -392,7 +430,7 @@ function buildFx() {
   if (!fxOk || !hasCam) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = !fxOk ? 'Efeitos de câmera: use Chrome, Edge ou Firefox.' : 'Ligue uma câmera para usar efeitos.'; box.append(h); return; }
   Object.entries(EFFECTS).forEach(([nome, css]) => {
     const b = document.createElement('button'); b.textContent = nome; b.setAttribute('aria-pressed', String(css === effectFilter));
-    b.onclick = () => { effectFilter = css; [...box.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); };
+    b.onclick = () => { setEffect(css); [...box.children].forEach(x => x.setAttribute('aria-pressed', String(x === b))); };
     box.append(b);
   });
 }
@@ -427,7 +465,7 @@ function noise(out, { t = 0, d = .3, v = .2, hp = 0 }) {
 }
 function sbOut() { // vai para os seus alto-falantes e para a chamada
   AC = AC || new AudioContext(); AC.resume();
-  const g = AC.createGain(); g.gain.value = .7; g.connect(AC.destination); if (mixDest) g.connect(mixDest); return g;
+  const g = AC.createGain(); g.gain.value = .7; if (sbHear) g.connect(AC.destination); if (sbDest) g.connect(sbDest); return g;
 }
 const SB = {
   '📯 Buzina': o => { tone(o, { f: 440, d: .7, type: 'sawtooth' }); tone(o, { f: 554, d: .7, type: 'sawtooth' }); },
@@ -438,10 +476,11 @@ const SB = {
   '🔔 Ding': o => tone(o, { f: 1318, d: .9, v: .3 }),
 };
 function addSbButton(label, play) {
-  const b = document.createElement('button'); b.textContent = label; b.onclick = () => play(sbOut());
+  const b = document.createElement('button'), [emo, ...rest] = label.split(' ');
+  const e = document.createElement('span'); e.className = 'emo'; e.textContent = emo; b.append(e, rest.join(' ')); b.onclick = () => play(sbOut());
   $('sb').insertBefore(b, $('sbAdd'));
 }
-const add = document.createElement('label'); add.id = 'sbAdd'; add.textContent = '+ Adicionar som';
+const add = document.createElement('label'); add.id = 'sbAdd'; add.append(Object.assign(document.createElement('span'), { className: 'emo', textContent: '➕' }), 'Adicionar som');
 const file = document.createElement('input'); file.type = 'file'; file.accept = 'audio/*'; file.hidden = true; add.append(file);
 file.onchange = async () => {
   const f = file.files[0]; file.value = ''; if (!f) return;
@@ -454,6 +493,23 @@ file.onchange = async () => {
 };
 $('sb').append(add);
 Object.entries(SB).forEach(([label, fn]) => addSbButton(label, fn));
+
+// ---------- menu de ferramentas ----------
+let sbHear = localStorage.getItem('sbmudo') !== '1'; const sbAudios = [];
+function attachSb(p, s) {
+  if (p.sbAudio) return;
+  const a = new Audio(); a.srcObject = s; a.muted = !sbHear; a.play().catch(() => {}); p.sbAudio = a; sbAudios.push(a);
+}
+function paintSbMute() {
+  $('sbMute').textContent = sbHear ? '🔊 Sons da call' : '🔇 Sons da call (mudo)';
+  $('sbMute').setAttribute('aria-pressed', String(!sbHear)); sbAudios.forEach(a => a.muted = !sbHear);
+}
+$('sbMute').onclick = () => { sbHear = !sbHear; localStorage.setItem('sbmudo', sbHear ? '0' : '1'); paintSbMute(); };
+paintSbMute();
+document.querySelectorAll('.dockTabs [data-p]').forEach(b => b.onclick = () => {
+  const open = b.getAttribute('aria-pressed') !== 'true';
+  document.querySelectorAll('.dockTabs [data-p]').forEach(x => { const on = x === b && open; x.setAttribute('aria-pressed', String(on)); $(x.dataset.p).hidden = !on; });
+});
 </script>
 </body>
 </html>
