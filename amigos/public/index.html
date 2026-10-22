@@ -84,6 +84,10 @@
     #side.open { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.5); }
     #menuBtn { display: block; }
   }
+  #sb { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 14px 14px; align-items: center; }
+  #sb button, #sb label { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 7px 14px; cursor: pointer; color: var(--text); font-size: .95rem; transition: transform .1s; }
+  #sb button:active { transform: scale(.94); }
+  #sb .hint { color: var(--muted); font-size: .85rem; width: 100%; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -120,6 +124,7 @@
         <button id="leaveBtn" class="leave" title="Sair da voz" aria-label="Sair da voz">✕</button>
       </div>
     </div>
+    <button class="ch" id="soundBtn"></button>
     <div class="me" id="meName"></div>
   </nav>
 
@@ -138,6 +143,7 @@
       </div>
       <div id="grid" hidden></div>
       <div id="fx" hidden></div>
+      <div id="sb" hidden><span class="hint">Sons para a call (todo mundo ouve):</span></div>
     </section>
   </main>
 </div>
@@ -147,6 +153,7 @@ const $ = (id) => document.getElementById(id);
 let ws, myId, myName, rtc = { iceServers: [] };
 let channels = [], cur = 'geral', view = 'text'; const unread = new Set();
 let localStream = null, rawStream = null, screenStream = null, inVoice = false, effectFilter = 'none';
+let AC = null, mixDest = null, micGain = null, micOn = true, soundOn = localStorage.getItem('mudo') !== '1';
 const peers = {}; // id -> { pc, name, polite, making, ignore, screenId, screenSenders, tiles }
 const send = (o) => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
 
@@ -175,11 +182,12 @@ function onMsg(m) {
   else if (m.type === 'chat') {
     if (m.channel === cur) { $('msgs').querySelector('.empty')?.remove(); addMsg(m.msg); }
     else if (m.msg.from !== myId) { unread.add(m.channel); renderChannels(); }
+    if (m.msg.from !== myId) SND.msg();
   }
   else if (m.type === 'voice-peers') m.peers.forEach(p => makePeer(p.id, p.name));
   else if (m.type === 'voice-full') { leaveVoice(); $('voiceErr').textContent = 'A sala de voz está cheia (máximo 6).'; }
-  else if (m.type === 'peer-joined') { if (inVoice) makePeer(m.id, m.name); }
-  else if (m.type === 'peer-left') closePeer(m.id);
+  else if (m.type === 'peer-joined') { if (inVoice) { makePeer(m.id, m.name); SND.join(); } }
+  else if (m.type === 'peer-left') { if (inVoice && peers[m.id]) SND.leave(); closePeer(m.id); }
   else if (m.type === 'signal') handleSignal(m.from, m.data);
   else if (m.type === 'screen') {
     const p = peers[m.from]; if (!p) return;
@@ -232,11 +240,12 @@ $('voiceCh').onclick = () => {
 };
 $('joinVoice').onclick = async () => {
   $('voiceErr').textContent = '';
+  AC = AC || new AudioContext(); AC.resume();
   await getLocalMedia();
-  if (!localStream) $('voiceErr').textContent = 'Sem acesso ao microfone/câmera. Clique no cadeado ao lado do endereço do site, permita o acesso e tente de novo. Você ainda pode entrar só para ouvir e ver.';
+  if (!rawStream) $('voiceErr').textContent = 'Sem acesso ao microfone/câmera. Clique no cadeado ao lado do endereço do site, permita o acesso e tente de novo. Você ainda pode entrar só para ouvir e ver.';
   inVoice = true; send({ type: 'voice-join' });
-  $('voiceCta').hidden = true; $('grid').hidden = false; $('fx').hidden = false; $('voiceBar').hidden = false;
-  if (localStream) addTile('me', localStream.id, localStream, { local: true, label: myName + ' (você)' });
+  $('voiceCta').hidden = true; $('grid').hidden = false; $('fx').hidden = false; $('sb').hidden = false; $('voiceBar').hidden = false; SND.join();
+  addTile('me', localStream.id, localStream, { local: true, label: myName + ' (você)' });
   buildFx();
 };
 
@@ -245,18 +254,23 @@ async function getLocalMedia() {
   for (const c of [{ audio, video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } }, { audio, video: false }]) {
     try { localStream = await navigator.mediaDevices.getUserMedia(c); break; } catch {}
   }
-  if (localStream) { rawStream = localStream; localStream = buildPipeline(rawStream); }
-  $('micBtn').disabled = !localStream;
-  $('camBtn').disabled = !localStream || !localStream.getVideoTracks().length;
+  rawStream = localStream; localStream = null; micOn = true;
+  AC = AC || new AudioContext(); mixDest = AC.createMediaStreamDestination(); micGain = AC.createGain(); micGain.connect(mixDest);
+  const at = rawStream && rawStream.getAudioTracks()[0];
+  if (at) AC.createMediaStreamSource(new MediaStream([at])).connect(micGain);
+  const vt = rawStream ? buildVideo(rawStream) : null;
+  localStream = new MediaStream([mixDest.stream.getAudioTracks()[0], vt].filter(Boolean));
+  $('micBtn').disabled = !at;
+  $('camBtn').disabled = !vt;
 }
 
 function leaveVoice() {
   if (screenStream) stopShare();
   [localStream, rawStream].forEach(s => s && s.getTracks().forEach(t => t.stop()));
-  localStream = rawStream = null; inVoice = false;
+  localStream = rawStream = null; inVoice = false; mixDest = micGain = null; SND.leave();
   Object.keys(peers).forEach(closePeer); $('grid').textContent = '';
   send({ type: 'voice-leave' });
-  $('voiceCta').hidden = false; $('grid').hidden = true; $('fx').hidden = true; $('voiceBar').hidden = true;
+  $('voiceCta').hidden = false; $('grid').hidden = true; $('fx').hidden = true; $('sb').hidden = true; $('voiceBar').hidden = true;
   ['micBtn', 'camBtn'].forEach(id => { $(id).classList.remove('off'); });
 }
 $('leaveBtn').onclick = leaveVoice;
@@ -327,7 +341,10 @@ function removeTile(peerId, streamId) {
 }
 
 // ---------- controles ----------
-$('micBtn').onclick = () => toggle('getAudioTracks', $('micBtn'));
+$('micBtn').onclick = () => {
+  if (!micGain) return;
+  micOn = !micOn; micGain.gain.value = micOn ? 1 : 0; $('micBtn').classList.toggle('off', !micOn); micOn ? SND.unmute() : SND.mute();
+};
 $('camBtn').onclick = () => toggle('getVideoTracks', $('camBtn'));
 function toggle(getter, btn) {
   if (!localStream) return;
@@ -361,13 +378,13 @@ function stopShare() {
 // ---------- efeitos de câmera ----------
 const EFFECTS = { Normal: 'none', 'Preto e branco': 'grayscale(1)', Sépia: 'sepia(1)', Desfoque: 'blur(6px)', Brilho: 'brightness(1.35)', Contraste: 'contrast(1.5)', Vívido: 'saturate(1.8) contrast(1.1)', Invertido: 'invert(1)' };
 const fxOk = 'filter' in CanvasRenderingContext2D.prototype && !!HTMLCanvasElement.prototype.captureStream;
-function buildPipeline(raw) {
-  const vt = raw.getVideoTracks()[0]; if (!vt || !fxOk) return raw;
+function buildVideo(raw) {
+  const vt = raw.getVideoTracks()[0]; if (!vt || !fxOk) return vt || null;
   const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([vt]); v.play();
   const c = document.createElement('canvas'), ctx = c.getContext('2d'), st = vt.getSettings();
   c.width = st.width || 1280; c.height = st.height || 720;
   const timer = setInterval(() => { if (!inVoice) return clearInterval(timer); if (v.readyState >= 2) { ctx.filter = effectFilter; ctx.drawImage(v, 0, 0, c.width, c.height); } }, 33);
-  return new MediaStream([...raw.getAudioTracks(), c.captureStream(30).getVideoTracks()[0]]);
+  return c.captureStream(30).getVideoTracks()[0];
 }
 function buildFx() {
   const box = $('fx'); box.textContent = '';
@@ -379,6 +396,64 @@ function buildFx() {
     box.append(b);
   });
 }
+
+// ---------- avisos sonoros (só você ouve) ----------
+function beep(freqs, dur = .1, vol = .07) {
+  if (!soundOn) return;
+  try {
+    AC = AC || new AudioContext(); if (AC.state === 'suspended') AC.resume();
+    freqs.forEach((f, i) => tone(AC.destination, { f, t: i * dur, d: dur, v: vol }));
+  } catch {}
+}
+const SND = { msg: () => beep([880, 1175], .09), join: () => beep([523, 784]), leave: () => beep([784, 523]), mute: () => beep([330], .12), unmute: () => beep([660], .12) };
+function paintSoundBtn() { $('soundBtn').textContent = soundOn ? '🔔 Avisos sonoros: ligados' : '🔕 Avisos sonoros: desligados'; }
+$('soundBtn').onclick = () => { soundOn = !soundOn; localStorage.setItem('mudo', soundOn ? '0' : '1'); paintSoundBtn(); SND.msg(); };
+paintSoundBtn();
+
+// ---------- soundboard (todos na call ouvem) ----------
+function tone(out, { f, f2, t = 0, d = .3, type = 'sine', v = .25 }) {
+  const x = AC.createOscillator(), g = AC.createGain(), st = AC.currentTime + t;
+  x.type = type; x.frequency.setValueAtTime(f, st); if (f2) x.frequency.linearRampToValueAtTime(f2, st + d);
+  g.gain.setValueAtTime(v, st); g.gain.exponentialRampToValueAtTime(.0001, st + d);
+  x.connect(g); g.connect(out); x.start(st); x.stop(st + d + .02);
+}
+function noise(out, { t = 0, d = .3, v = .2, hp = 0 }) {
+  const n = Math.floor(AC.sampleRate * d), buf = AC.createBuffer(1, n, AC.sampleRate), a = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) a[i] = Math.random() * 2 - 1;
+  const s = AC.createBufferSource(), g = AC.createGain(), st = AC.currentTime + t; s.buffer = buf;
+  g.gain.setValueAtTime(v, st); g.gain.exponentialRampToValueAtTime(.0001, st + d);
+  let node = s; if (hp) { const f = AC.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp; s.connect(f); node = f; }
+  node.connect(g); g.connect(out); s.start(st);
+}
+function sbOut() { // vai para os seus alto-falantes e para a chamada
+  AC = AC || new AudioContext(); AC.resume();
+  const g = AC.createGain(); g.gain.value = .7; g.connect(AC.destination); if (mixDest) g.connect(mixDest); return g;
+}
+const SB = {
+  '📯 Buzina': o => { tone(o, { f: 440, d: .7, type: 'sawtooth' }); tone(o, { f: 554, d: .7, type: 'sawtooth' }); },
+  '🥁 Ba-dum-tss': o => { tone(o, { f: 160, f2: 50, d: .15, v: .5 }); tone(o, { f: 160, f2: 50, t: .2, d: .15, v: .5 }); noise(o, { t: .4, d: .5, hp: 5000, v: .3 }); },
+  '🎺 Triste': o => { [311, 294, 277].forEach((f, i) => tone(o, { f, t: i * .45, d: .45, type: 'sawtooth', v: .2 })); tone(o, { f: 262, f2: 200, t: 1.35, d: 1, type: 'sawtooth', v: .2 }); },
+  '🚨 Sirene': o => { for (let i = 0; i < 3; i++) tone(o, { f: 600, f2: 1100, t: i * .6, d: .6, type: 'square', v: .12 }); },
+  '👏 Palmas': o => { for (let i = 0; i < 40; i++) noise(o, { t: Math.random() * 1.6, d: .06, v: .35, hp: 1500 }); },
+  '🔔 Ding': o => tone(o, { f: 1318, d: .9, v: .3 }),
+};
+function addSbButton(label, play) {
+  const b = document.createElement('button'); b.textContent = label; b.onclick = () => play(sbOut());
+  $('sb').insertBefore(b, $('sbAdd'));
+}
+const add = document.createElement('label'); add.id = 'sbAdd'; add.textContent = '+ Adicionar som';
+const file = document.createElement('input'); file.type = 'file'; file.accept = 'audio/*'; file.hidden = true; add.append(file);
+file.onchange = async () => {
+  const f = file.files[0]; file.value = ''; if (!f) return;
+  if (f.size > 5e6) return alert('Arquivo muito grande (máximo 5 MB).');
+  try {
+    AC = AC || new AudioContext();
+    const buf = await AC.decodeAudioData(await f.arrayBuffer());
+    addSbButton('🎵 ' + f.name.replace(/\.[^.]+$/, '').slice(0, 14), (o) => { const s = AC.createBufferSource(); s.buffer = buf; s.connect(o); s.start(); });
+  } catch { alert('Não consegui abrir esse áudio. Tente um arquivo MP3 ou WAV.'); }
+};
+$('sb').append(add);
+Object.entries(SB).forEach(([label, fn]) => addSbButton(label, fn));
 </script>
 </body>
 </html>
