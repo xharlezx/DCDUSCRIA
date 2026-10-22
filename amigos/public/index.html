@@ -52,7 +52,7 @@
   main { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto 1fr; }
   .top { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }
   #menuBtn { display: none; background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; }
-  #textView, #voiceView { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  #textView, #voiceView, #musicView { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
   #msgs { flex: 1; overflow: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
   .msg b { margin-right: 8px; }
   .msg time { color: var(--muted); font-size: .78rem; }
@@ -97,6 +97,35 @@
   #sb button:hover, #sb label:hover { border-color: var(--accent); }
   #sb button:active { transform: scale(.94); }
   #sb .emo { font-size: 1.5rem; line-height: 1.1; }
+  input[type=range] { padding: 0; background: none; border: 0; accent-color: var(--accent); width: 100%; }
+  #plHead { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 18px 8px; flex-wrap: wrap; }
+  #plHead h2 { margin: 0; } #plHead .hint { margin: 2px 0 0; color: var(--muted); font-size: .88rem; }
+  label.primary { cursor: pointer; padding: 10px 16px; }
+  #playlist { flex: 1; min-height: 0; overflow: auto; padding: 8px 18px; }
+  .trk { display: flex; align-items: center; gap: 4px; }
+  .tmain { flex: 1; display: flex; gap: 14px; text-align: left; background: none; border: 0; padding: 10px; border-radius: 8px; color: var(--text); min-width: 0; }
+  .tmain:hover { background: var(--surface); }
+  .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num { width: 1.6rem; color: var(--muted); text-align: right; flex: none; }
+  .trk.on .tname { color: var(--accent); font-weight: 600; }
+  .del { background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 8px; }
+  .del:hover { color: var(--danger); }
+  #player { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 16px; align-items: center; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--side); }
+  .np { min-width: 0; display: grid; } .np b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .np small { color: var(--muted); }
+  .pc { display: flex; justify-content: center; gap: 8px; align-items: center; }
+  .pc button { background: none; border: 0; font-size: 1.15rem; padding: 6px 10px; border-radius: 50%; transition: transform .1s; }
+  .pc button:active { transform: scale(.9); }
+  .pc button[aria-pressed="true"] { color: var(--accent); }
+  .pc .big { background: var(--accent); color: #1b1608; width: 44px; height: 44px; padding: 0; }
+  .seek { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--muted); }
+  .vol { display: flex; align-items: center; gap: 8px; } .bc { font-size: .82rem; color: var(--muted); display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+  .bc input { padding: 0; width: auto; }
+  .mid { display: grid; gap: 4px; }
+  #mini { display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 10px; padding: 6px 10px; margin-top: 4px; font-size: .85rem; }
+  #mini span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #mini button { background: none; border: 0; }
+  #sbVol { width: 90px; }
+  @media (max-width: 760px) { #player { grid-template-columns: 1fr; gap: 8px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -121,6 +150,9 @@
     <div class="sec">Voz</div>
     <button class="ch" id="voiceCh">🔊 Sala de voz</button>
     <ul id="voiceMembers"></ul>
+    <div class="sec">Música</div>
+    <button class="ch" id="musicCh">🎵 Player de músicas</button>
+    <div id="mini" hidden><span id="miniTitle"></span><button id="miniPlay" aria-label="Tocar ou pausar">▶</button></div>
     <div class="sec">Online</div>
     <ul id="onlineList"></ul>
     <div class="spacer"></div>
@@ -143,6 +175,28 @@
       <div id="msgs" aria-live="polite"></div>
       <form id="chatForm"><input id="chatInput" maxlength="500" autocomplete="off"><button>Enviar</button></form>
     </section>
+    <section id="musicView" hidden>
+      <div id="plHead">
+        <div><h2>Músicas</h2><p class="hint">Escolha arquivos de áudio do seu aparelho. A lista some quando você recarrega a página.</p></div>
+        <label class="primary">+ Adicionar músicas<input id="musicFile" type="file" accept="audio/*" multiple hidden></label>
+      </div>
+      <ul id="playlist"></ul>
+      <div id="player">
+        <div class="np"><b id="npTitle">Nada tocando</b><small id="npSub">Adicione músicas para começar</small></div>
+        <div class="mid">
+          <div class="pc">
+            <button id="shuf" aria-pressed="false" title="Aleatório">🔀</button><button id="prev" title="Anterior">⏮</button>
+            <button id="play" class="big" title="Tocar ou pausar">▶</button><button id="next" title="Próxima">⏭</button>
+            <button id="rep" aria-pressed="false" title="Repetir">🔁</button>
+          </div>
+          <div class="seek"><span id="tcur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0" aria-label="Progresso"><span id="tdur">0:00</span></div>
+        </div>
+        <div>
+          <div class="vol"><span>🔈</span><input type="range" id="vol" min="0" max="100" value="80" aria-label="Volume da música"></div>
+          <label class="bc"><input type="checkbox" id="bcast"> Transmitir para a call (use fone de ouvido)</label>
+        </div>
+      </div>
+    </section>
     <section id="voiceView" hidden>
       <div id="voiceCta">
         <h2 style="margin:0">Sala de voz</h2>
@@ -156,6 +210,7 @@
           <button data-p="fx" aria-pressed="false">✨ Efeitos</button>
           <button data-p="sb" aria-pressed="false">🎵 Sons</button>
           <span class="grow"></span>
+          <input type="range" id="sbVol" min="0" max="100" value="100" title="Volume dos sons e músicas que chegam da call" aria-label="Volume dos sons da call">
           <button id="sbMute" aria-pressed="false" title="Silenciar os sons da call, os seus e os dos outros (só para você)"></button>
         </div>
         <div id="fx" hidden></div>
@@ -222,11 +277,11 @@ function renderChannels() {
     b.textContent = '# ' + n; b.onclick = () => { openChannel(n); $('side').classList.remove('open'); };
     li.append(b); $('chList').append(li);
   });
-  $('voiceCh').classList.toggle('on', view === 'voice');
+  $('voiceCh').classList.toggle('on', view === 'voice'); $('musicCh').classList.toggle('on', view === 'music');
 }
 function openChannel(n) {
   cur = n; view = 'text'; unread.delete(n);
-  $('textView').hidden = false; $('voiceView').hidden = true;
+  $('textView').hidden = false; $('voiceView').hidden = true; $('musicView').hidden = true;
   $('title').textContent = '# ' + n; $('chatInput').placeholder = 'Mensagem em #' + n;
   $('msgs').textContent = ''; renderChannels(); send({ type: 'history', channel: n });
 }
@@ -253,7 +308,7 @@ function renderMembers(list) {
 
 // ---------- sala de voz ----------
 $('voiceCh').onclick = () => {
-  view = 'voice'; $('textView').hidden = true; $('voiceView').hidden = false;
+  view = 'voice'; $('textView').hidden = true; $('voiceView').hidden = false; $('musicView').hidden = true;
   $('title').textContent = '🔊 Sala de voz'; renderChannels(); $('side').classList.remove('open');
 };
 $('joinVoice').onclick = async () => {
@@ -264,7 +319,7 @@ $('joinVoice').onclick = async () => {
   inVoice = true; send({ type: 'voice-join' });
   $('voiceCta').hidden = true; $('grid').hidden = false; $('dock').hidden = false; $('voiceBar').hidden = false; SND.join();
   addTile('me', localStream.id, localStream, { local: true, label: myName + ' (você)' });
-  buildFx();
+  buildFx(); wireBcast();
 };
 
 async function getLocalMedia() {
@@ -287,7 +342,7 @@ function leaveVoice() {
   if (screenStream) stopShare();
   [localStream, rawStream].forEach(s => s && s.getTracks().forEach(t => t.stop()));
   localStream = rawStream = null; inVoice = false; mixDest = micGain = null; SND.leave();
-  if (fxStop) fxStop(); fxTrack = fxStop = null; sbDest = null;
+  if (fxStop) fxStop(); fxTrack = fxStop = null; sbDest = null; wireBcast();
   document.querySelectorAll('.dockTabs [data-p]').forEach(x => { x.setAttribute('aria-pressed', 'false'); $(x.dataset.p).hidden = true; });
   Object.keys(peers).forEach(closePeer); $('grid').textContent = '';
   send({ type: 'voice-leave' });
@@ -498,7 +553,7 @@ Object.entries(SB).forEach(([label, fn]) => addSbButton(label, fn));
 let sbHear = localStorage.getItem('sbmudo') !== '1'; const sbAudios = [];
 function attachSb(p, s) {
   if (p.sbAudio) return;
-  const a = new Audio(); a.srcObject = s; a.muted = !sbHear; a.play().catch(() => {}); p.sbAudio = a; sbAudios.push(a);
+  const a = new Audio(); a.srcObject = s; a.muted = !sbHear; a.volume = sbVol; a.play().catch(() => {}); p.sbAudio = a; sbAudios.push(a);
 }
 function paintSbMute() {
   $('sbMute').textContent = sbHear ? '🔊 Sons da call' : '🔇 Sons da call (mudo)';
@@ -510,6 +565,83 @@ document.querySelectorAll('.dockTabs [data-p]').forEach(b => b.onclick = () => {
   const open = b.getAttribute('aria-pressed') !== 'true';
   document.querySelectorAll('.dockTabs [data-p]').forEach(x => { const on = x === b && open; x.setAttribute('aria-pressed', String(on)); $(x.dataset.p).hidden = !on; });
 });
+
+// ---------- player de músicas ----------
+let sbVol = 1;
+$('sbVol').oninput = () => { sbVol = $('sbVol').value / 100; sbAudios.forEach(a => a.volume = sbVol); };
+$('musicCh').onclick = () => {
+  view = 'music'; $('textView').hidden = true; $('voiceView').hidden = true; $('musicView').hidden = false;
+  $('title').textContent = '🎵 Músicas'; renderChannels(); $('side').classList.remove('open');
+};
+const aud = new Audio(); let tracks = [], idx = -1, shuffleOn = false, repMode = 0, musicLocal = null, musicBcast = null;
+const fmt = (t) => isFinite(t) ? Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0') : '0:00';
+
+function musicInit() {
+  AC = AC || new AudioContext(); AC.resume(); if (musicLocal) return;
+  const g = AC.createGain(); AC.createMediaElementSource(aud).connect(g);
+  musicLocal = AC.createGain(); musicLocal.gain.value = $('vol').value / 100; g.connect(musicLocal); musicLocal.connect(AC.destination);
+  musicBcast = AC.createGain(); musicBcast.gain.value = .8; g.connect(musicBcast); wireBcast();
+}
+function wireBcast() { // manda a música para os amigos só se a caixinha estiver marcada e você estiver na voz
+  if (!musicBcast) return;
+  try { musicBcast.disconnect(); } catch {}
+  if ($('bcast').checked && sbDest) musicBcast.connect(sbDest);
+}
+$('bcast').onchange = wireBcast;
+$('vol').oninput = () => { if (musicLocal) musicLocal.gain.value = $('vol').value / 100; };
+
+$('musicFile').onchange = (e) => {
+  [...e.target.files].forEach(f => tracks.push({ name: f.name.replace(/\.[^.]+$/, ''), url: URL.createObjectURL(f) }));
+  e.target.value = ''; renderPl(); if (idx < 0 && tracks.length) playIdx(0);
+};
+function renderPl() {
+  const ul = $('playlist'); ul.textContent = '';
+  if (!tracks.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'Sua lista está vazia. Clique em "Adicionar músicas".'; ul.append(d); return; }
+  tracks.forEach((t, i) => {
+    const li = document.createElement('li'); li.className = 'trk' + (i === idx ? ' on' : '');
+    const b = document.createElement('button'); b.className = 'tmain';
+    const n = document.createElement('span'); n.className = 'num'; n.textContent = i === idx && !aud.paused ? '♪' : i + 1;
+    const nm = document.createElement('span'); nm.className = 'tname'; nm.textContent = t.name;
+    b.append(n, nm); b.onclick = () => playIdx(i);
+    const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.setAttribute('aria-label', 'Remover ' + t.name);
+    x.onclick = () => removeTrack(i);
+    li.append(b, x); ul.append(li);
+  });
+}
+function playIdx(i) {
+  musicInit(); idx = i; aud.src = tracks[i].url; aud.play().catch(() => {}); showNow(); renderPl();
+}
+function removeTrack(i) {
+  URL.revokeObjectURL(tracks[i].url); tracks.splice(i, 1);
+  if (i === idx) { aud.pause(); aud.removeAttribute('src'); idx = -1; showNow(); } else if (i < idx) idx--;
+  renderPl();
+}
+function showNow() {
+  const t = tracks[idx];
+  $('npTitle').textContent = t ? t.name : 'Nada tocando'; $('npSub').textContent = t ? 'Faixa ' + (idx + 1) + ' de ' + tracks.length : 'Adicione músicas para começar';
+  $('mini').hidden = !t; $('miniTitle').textContent = t ? t.name : '';
+}
+function togglePlay() { if (idx < 0) { if (tracks.length) playIdx(0); } else if (aud.paused) { musicInit(); aud.play(); } else aud.pause(); }
+function step(dir, auto) {
+  if (!tracks.length) return;
+  let n = shuffleOn && tracks.length > 1 ? (() => { let r; do r = Math.floor(Math.random() * tracks.length); while (r === idx); return r; })() : idx + dir;
+  if (n >= tracks.length) { if (repMode === 1 || !auto) n = 0; else { aud.pause(); aud.currentTime = 0; return; } }
+  if (n < 0) n = tracks.length - 1;
+  playIdx(n);
+}
+$('play').onclick = $('miniPlay').onclick = togglePlay;
+$('next').onclick = () => step(1, false);
+$('prev').onclick = () => (aud.currentTime > 3 ? (aud.currentTime = 0) : step(-1, false));
+$('shuf').onclick = () => { shuffleOn = !shuffleOn; $('shuf').setAttribute('aria-pressed', String(shuffleOn)); };
+$('rep').onclick = () => { repMode = (repMode + 1) % 3; $('rep').textContent = repMode === 2 ? '🔂' : '🔁'; $('rep').setAttribute('aria-pressed', String(repMode > 0)); };
+aud.onended = () => (repMode === 2 ? (aud.currentTime = 0, aud.play()) : step(1, true));
+aud.onplay = aud.onpause = () => { $('play').textContent = $('miniPlay').textContent = aud.paused ? '▶' : '⏸'; renderPl(); };
+aud.onloadedmetadata = () => { $('tdur').textContent = fmt(aud.duration); };
+let seeking = false;
+aud.ontimeupdate = () => { $('tcur').textContent = fmt(aud.currentTime); if (!seeking && aud.duration) $('seek').value = aud.currentTime / aud.duration * 1000; };
+$('seek').onpointerdown = () => seeking = true;
+$('seek').onchange = () => { seeking = false; if (aud.duration) aud.currentTime = $('seek').value / 1000 * aud.duration; };
+renderPl();
 </script>
 </body>
 </html>
