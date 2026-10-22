@@ -1,27 +1,20 @@
-// Servidor de sinalização: só apresenta os navegadores uns aos outros.
-// O áudio, o vídeo e a tela vão direto entre os participantes (WebRTC).
+// Servidor do Quintal: canais de texto + sala de voz (sinalização WebRTC).
+// Áudio, vídeo e tela vão direto entre os amigos; o servidor só apresenta e guarda o chat.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 
 const PORT = process.env.PORT || 3000;
-const ACCESS_CODE = process.env.ACCESS_CODE || ''; // opcional: senha para entrar
-const MAX_PER_ROOM = 6;
-
+const CODE = process.env.ACCESS_CODE || '';
+const MAX_VOICE = 6;
 const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
-if (process.env.TURN_URL) {
-  iceServers.push({
-    urls: process.env.TURN_URL,
-    username: process.env.TURN_USER,
-    credential: process.env.TURN_PASS,
-  });
-}
+if (process.env.TURN_URL) iceServers.push({ urls: process.env.TURN_URL, username: process.env.TURN_USER, credential: process.env.TURN_PASS });
 
 const server = http.createServer((req, res) => {
   if (req.url === '/ice') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    return res.end(JSON.stringify({ iceServers, needsCode: !!ACCESS_CODE }));
+    return res.end(JSON.stringify({ iceServers, needsCode: !!CODE }));
   }
   fs.readFile(path.join(__dirname, 'public', 'index.html'), (err, data) => {
     if (err) { res.writeHead(500); return res.end('Erro'); }
@@ -30,62 +23,76 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const rooms = new Map(); // sala -> Map(id -> { ws, name })
-let nextId = 1;
-const send = (ws, msg) => ws.readyState === 1 && ws.send(JSON.stringify(msg));
+const channels = new Map([['geral', []], ['jogos', []]]); // histórico fica na memória
+const clients = new Map(); // id -> { ws, name, voice }
+let next = 1;
+const send = (ws, m) => ws.readyState === 1 && ws.send(JSON.stringify(m));
+const all = (m) => clients.forEach((c) => send(c.ws, m));
+const members = () => ({ type: 'members', list: [...clients].map(([id, c]) => ({ id, name: c.name, voice: c.voice })) });
 
-const wss = new WebSocketServer({ server });
-wss.on('connection', (ws) => {
-  let room = null;
+new WebSocketServer({ server }).on('connection', (ws) => {
   let me = null;
 
+  function leaveVoice() {
+    const c = clients.get(me);
+    if (!c || !c.voice) return;
+    c.voice = false;
+    clients.forEach((x) => x.voice && send(x.ws, { type: 'peer-left', id: me }));
+    all(members());
+  }
+
   ws.on('message', (raw) => {
-    let msg;
-    try { msg = JSON.parse(raw); } catch { return; }
+    let m;
+    try { m = JSON.parse(raw); } catch { return; }
 
-    if (msg.type === 'join' && !room) {
-      if (ACCESS_CODE && msg.code !== ACCESS_CODE) {
-        return send(ws, { type: 'error', message: 'Código de acesso incorreto.' });
-      }
-      const roomName = String(msg.room || 'geral').slice(0, 40);
-      const members = rooms.get(roomName) || new Map();
-      if (members.size >= MAX_PER_ROOM) {
-        return send(ws, { type: 'error', message: `Sala cheia (máximo ${MAX_PER_ROOM}).` });
-      }
-      room = roomName;
-      me = String(nextId++);
-      const name = String(msg.name || 'Alguém').slice(0, 24);
-      send(ws, {
-        type: 'joined', id: me,
-        peers: [...members].map(([id, m]) => ({ id, name: m.name })),
-      });
-      members.forEach((m) => send(m.ws, { type: 'peer-joined', id: me, name }));
-      members.set(me, { ws, name });
-      rooms.set(room, members);
-      return;
+    if (m.type === 'hello' && !me) {
+      if (CODE && m.code !== CODE) return send(ws, { type: 'error', message: 'Código de acesso incorreto.' });
+      me = String(next++);
+      clients.set(me, { ws, name: String(m.name || 'Alguém').slice(0, 24), voice: false });
+      send(ws, { type: 'ready', id: me, channels: [...channels.keys()] });
+      return all(members());
     }
+    if (!me) return;
+    const c = clients.get(me);
 
-    if (!room) return;
-    const members = rooms.get(room);
-    if (msg.type === 'signal' || msg.type === 'screen' || msg.type === 'chat') {
-      if (msg.type === 'chat') msg.text = String(msg.text || '').slice(0, 500);
-      const out = { ...msg, from: me };
-      if (msg.to) {
-        const target = members.get(msg.to);
-        if (target) send(target.ws, out);
-      } else {
-        members.forEach((m, id) => id !== me && send(m.ws, out));
+    if (m.type === 'history') {
+      send(ws, { type: 'history', channel: m.channel, msgs: channels.get(m.channel) || [] });
+    } else if (m.type === 'create-channel') {
+      const n = String(m.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+      if (n && !channels.has(n) && channels.size < 20) {
+        channels.set(n, []);
+        all({ type: 'channels', list: [...channels.keys()] });
       }
+    } else if (m.type === 'chat') {
+      const msgs = channels.get(m.channel);
+      const text = String(m.text || '').slice(0, 500);
+      if (!msgs || !text.trim()) return;
+      const msg = { from: me, name: c.name, text, ts: Date.now() };
+      msgs.push(msg);
+      if (msgs.length > 200) msgs.shift();
+      all({ type: 'chat', channel: m.channel, msg });
+    } else if (m.type === 'voice-join') {
+      const inVoice = [...clients].filter(([, x]) => x.voice);
+      if (c.voice || inVoice.length >= MAX_VOICE) return send(ws, { type: 'voice-full' });
+      send(ws, { type: 'voice-peers', peers: inVoice.map(([id, x]) => ({ id, name: x.name })) });
+      inVoice.forEach(([, x]) => send(x.ws, { type: 'peer-joined', id: me, name: c.name }));
+      c.voice = true;
+      all(members());
+    } else if (m.type === 'voice-leave') {
+      leaveVoice();
+    } else if (m.type === 'signal' || m.type === 'screen') {
+      const out = { ...m, from: me };
+      clients.forEach((x, id) => { if (id !== me && x.voice && (!m.to || m.to === id)) send(x.ws, out); });
     }
   });
 
   ws.on('close', () => {
-    if (!room) return;
-    const members = rooms.get(room);
-    members.delete(me);
-    members.forEach((m) => send(m.ws, { type: 'peer-left', id: me }));
-    if (!members.size) rooms.delete(room);
+    if (!me) return;
+    leaveVoice();
+    clients.delete(me);
+    all(members());
   });
 });
 
-server.listen(PORT, () => console.log('Rodando na porta ' + PORT));
+server.listen(PORT, () => console.log('Quintal rodando na porta ' + PORT));
