@@ -67,7 +67,8 @@ wss.on('connection', (ws) => {
 
     if (!room) return;
     const members = rooms.get(room);
-    if (msg.type === 'signal' || msg.type === 'screen') {
+    if (msg.type === 'signal' || msg.type === 'screen' || msg.type === 'chat') {
+      if (msg.type === 'chat') msg.text = String(msg.text || '').slice(0, 500);
       const out = { ...msg, from: me };
       if (msg.to) {
         const target = members.get(msg.to);
