@@ -1,0 +1,9 @@
+{
+  "name": "chamada-amigos",
+  "version": "1.0.0",
+  "description": "Chamada de voz, vídeo e tela para um grupo pequeno (WebRTC)",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

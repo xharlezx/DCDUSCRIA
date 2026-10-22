@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sala dos amigos</title>
+<style>
+  :root {
+    --bg: #12141c; --surface: #1c1f2b; --line: #2b3042; --text: #e9e8f2; --muted: #9a9db4;
+    --accent: #8c9bff; --danger: #ff5d6c; --ok: #5fd6a0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #join { min-height: 100%; display: grid; place-items: center; padding: 24px; }
+  #join form { width: min(420px, 100%); display: grid; gap: 14px; }
+  #join h1 { margin: 0 0 4px; font-size: 2rem; letter-spacing: -0.02em; }
+  #join p { margin: 0 0 8px; color: var(--muted); }
+  label { display: grid; gap: 6px; color: var(--muted); font-size: .9rem; }
+  input { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .primary { background: var(--accent); color: #12141c; border: 0; border-radius: 10px; padding: 13px; font-weight: 600; cursor: pointer; }
+  #err { color: var(--danger); min-height: 1.4em; margin: 0; }
+
+  #call { display: none; height: 100%; grid-template-rows: auto 1fr auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); }
+  header strong { font-size: 1.05rem; }
+  header span { color: var(--muted); font-size: .9rem; }
+  .link { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+
+  #grid { display: grid; gap: 12px; padding: 14px; overflow: auto; align-content: start;
+          grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+  .tile { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+  .tile.screen { grid-column: span 2; }
+  @media (max-width: 760px) { .tile.screen { grid-column: span 1; } }
+  .tile video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
+  .tile.screen video { object-fit: contain; }
+  .tile .avatar { position: absolute; inset: 0; display: none; place-items: center; font-size: 2.6rem; font-weight: 600; color: var(--accent); background: var(--surface); }
+  .tile.novideo .avatar { display: grid; }
+  .tile.novideo video { visibility: hidden; }
+  .tile .name { position: absolute; left: 10px; bottom: 10px; background: rgba(18,20,28,.78); padding: 3px 10px; border-radius: 999px; font-size: .85rem; }
+
+  footer { display: flex; justify-content: center; gap: 10px; padding: 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+  footer button { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 11px 20px; cursor: pointer; }
+  footer button[aria-pressed="true"] { background: var(--accent); color: #12141c; border-color: var(--accent); }
+  footer button.off { background: #3a2128; border-color: var(--danger); }
+  footer button.leave { background: var(--danger); border-color: var(--danger); color: #fff; }
+  footer button:disabled { opacity: .4; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<main id="join">
+  <form id="joinForm">
+    <div>
+      <h1>Sala dos amigos</h1>
+      <p>Voz, vídeo e tela, direto entre vocês.</p>
+    </div>
+    <label>Seu nome <input id="name" required maxlength="24" autocomplete="nickname"></label>
+    <label>Nome da sala <input id="room" required maxlength="40" value="geral"></label>
+    <label id="codeLabel" hidden>Código de acesso <input id="code" type="password"></label>
+    <button class="primary" type="submit">Entrar na sala</button>
+    <p id="err" role="alert"></p>
+  </form>
+</main>
+
+<section id="call">
+  <header>
+    <div><strong id="roomTitle"></strong> <span id="count"></span></div>
+    <button class="link" id="invite">Copiar link de convite</button>
+  </header>
+  <div id="grid"></div>
+  <footer>
+    <button id="micBtn" aria-pressed="false">Microfone</button>
+    <button id="camBtn" aria-pressed="false">Câmera</button>
+    <button id="shareBtn" aria-pressed="false">Compartilhar tela</button>
+    <button id="leaveBtn" class="leave">Sair</button>
+  </footer>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let ws, myId, myName, rtcConfig = { iceServers: [] };
+let localStream = null, screenStream = null;
+const peers = {}; // id -> { pc, name, polite, making, ignore, screenId, screenSenders, tiles }
+
+// ---------- entrada ----------
+const hashRoom = decodeURIComponent(location.hash.slice(1));
+if (hashRoom) $('room').value = hashRoom;
+$('name').value = localStorage.getItem('nome') || '';
+
+fetch('/ice').then(r => r.json()).then(cfg => {
+  rtcConfig = { iceServers: cfg.iceServers };
+  $('codeLabel').hidden = !cfg.needsCode;
+});
+
+$('joinForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('err').textContent = '';
+  myName = $('name').value.trim();
+  localStorage.setItem('nome', myName);
+  await getLocalMedia();
+  connect($('room').value.trim(), $('code').value);
+});
+
+async function getLocalMedia() {
+  const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+  const tries = [
+    { audio, video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } },
+    { audio, video: false },
+  ];
+  for (const c of tries) {
+    try { localStream = await navigator.mediaDevices.getUserMedia(c); break; } catch {}
+  }
+  if (!localStream) { $('micBtn').disabled = true; $('camBtn').disabled = true; }
+  else if (!localStream.getVideoTracks().length) $('camBtn').disabled = true;
+}
+
+function connect(room, code) {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'join', room, name: myName, code }));
+  ws.onclose = () => { if ($('call').style.display === 'grid') alert('Conexão com o servidor perdida. Recarregue a página.'); };
+  ws.onmessage = async (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'error') { $('err').textContent = msg.message; ws.close(); }
+    else if (msg.type === 'joined') {
+      myId = msg.id;
+      showCall(room);
+      msg.peers.forEach(p => makePeer(p.id, p.name));
+    }
+    else if (msg.type === 'peer-joined') makePeer(msg.id, msg.name);
+    else if (msg.type === 'peer-left') closePeer(msg.id);
+    else if (msg.type === 'signal') handleSignal(msg.from, msg.data);
+    else if (msg.type === 'screen') {
+      const p = peers[msg.from];
+      if (!p) return;
+      p.screenId = msg.streamId;
+      Object.keys(p.tiles).forEach(sid => labelTile(msg.from, sid));
+    }
+  };
+}
+
+function showCall(room) {
+  $('join').style.display = 'none';
+  $('call').style.display = 'grid';
+  $('roomTitle').textContent = '# ' + room;
+  history.replaceState(null, '', '#' + encodeURIComponent(room));
+  if (localStream) addTile('me', localStream.id, localStream, { local: true, label: myName + ' (você)' });
+  updateCount();
+}
+
+const send = (obj) => ws && ws.readyState === 1 && ws.send(JSON.stringify(obj));
+const updateCount = () => { $('count').textContent = (Object.keys(peers).length + 1) + ' na sala'; };
+
+// ---------- conexões entre pessoas (negociação "perfeita") ----------
+function makePeer(id, name) {
+  if (peers[id]) return peers[id];
+  const pc = new RTCPeerConnection(rtcConfig);
+  const p = peers[id] = { pc, name, polite: myId > id, making: false, ignore: false, screenId: null, screenSenders: [], tiles: {} };
+
+  if (localStream) localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  else { pc.addTransceiver('audio', { direction: 'recvonly' }); pc.addTransceiver('video', { direction: 'recvonly' }); }
+  if (screenStream) { addScreenTo(p); send({ type: 'screen', to: id, streamId: screenStream.id }); }
+
+  pc.onnegotiationneeded = async () => {
+    try {
+      p.making = true;
+      await pc.setLocalDescription();
+      send({ type: 'signal', to: id, data: { description: pc.localDescription } });
+    } catch (e) { console.error(e); } finally { p.making = false; }
+  };
+  pc.onicecandidate = ({ candidate }) => candidate && send({ type: 'signal', to: id, data: { candidate } });
+  pc.oniceconnectionstatechange = () => { if (pc.iceConnectionState === 'failed') pc.restartIce(); };
+  pc.ontrack = ({ streams }) => {
+    const stream = streams[0];
+    if (!stream) return;
+    addTile(id, stream.id, stream, {});
+    stream.onremovetrack = () => {
+      if (!stream.getTracks().length) removeTile(id, stream.id);
+      else refreshVideoState(id, stream.id, stream);
+    };
+  };
+  updateCount();
+  return p;
+}
+
+async function handleSignal(from, data) {
+  const p = peers[from];
+  if (!p) return;
+  const pc = p.pc;
+  try {
+    if (data.description) {
+      const collision = data.description.type === 'offer' && (p.making || pc.signalingState !== 'stable');
+      p.ignore = !p.polite && collision;
+      if (p.ignore) return;
+      await pc.setRemoteDescription(data.description);
+      if (data.description.type === 'offer') {
+        await pc.setLocalDescription();
+        send({ type: 'signal', to: from, data: { description: pc.localDescription } });
+      }
+    } else if (data.candidate) {
+      try { await pc.addIceCandidate(data.candidate); } catch (e) { if (!p.ignore) console.warn(e); }
+    }
+  } catch (e) { console.error(e); }
+}
+
+function closePeer(id) {
+  const p = peers[id];
+  if (!p) return;
+  Object.keys(p.tiles).forEach(sid => removeTile(id, sid));
+  p.pc.close();
+  delete peers[id];
+  updateCount();
+}
+
+// ---------- quadros de vídeo ----------
+function addTile(peerId, streamId, stream, { local = false, label } = {}) {
+  const key = peerId + ':' + streamId;
+  if (document.getElementById(key)) return;
+  const tile = document.createElement('div');
+  tile.className = 'tile';
+  tile.id = key;
+  const v = document.createElement('video');
+  v.autoplay = true; v.playsInline = true; v.muted = local; v.srcObject = stream;
+  const av = document.createElement('div'); av.className = 'avatar';
+  const nm = document.createElement('div'); nm.className = 'name';
+  tile.append(v, av, nm);
+  tile.addEventListener('dblclick', () => tile.requestFullscreen && tile.requestFullscreen());
+  $('grid').append(tile);
+  if (peerId !== 'me') peers[peerId].tiles[streamId] = tile;
+  tile.dataset.label = label || '';
+  tile.dataset.local = local ? '1' : '';
+  stream.onaddtrack = () => refreshVideoState(peerId, streamId, stream);
+  labelTile(peerId, streamId);
+  refreshVideoState(peerId, streamId, stream);
+}
+
+function labelTile(peerId, streamId) {
+  const tile = document.getElementById(peerId + ':' + streamId);
+  if (!tile) return;
+  let text = tile.dataset.label;
+  if (peerId !== 'me') {
+    const p = peers[peerId];
+    const isScreen = p.screenId === streamId;
+    text = isScreen ? 'Tela de ' + p.name : p.name;
+    tile.classList.toggle('screen', isScreen);
+    tile.querySelector('.avatar').textContent = p.name.slice(0, 1).toUpperCase();
+  } else {
+    tile.querySelector('.avatar').textContent = myName.slice(0, 1).toUpperCase();
+  }
+  tile.querySelector('.name').textContent = text;
+}
+
+function refreshVideoState(peerId, streamId, stream) {
+  const tile = document.getElementById(peerId + ':' + streamId);
+  if (tile) tile.classList.toggle('novideo', !stream.getVideoTracks().length);
+}
+
+function removeTile(peerId, streamId) {
+  const tile = document.getElementById(peerId + ':' + streamId);
+  if (tile) tile.remove();
+  if (peerId !== 'me' && peers[peerId]) delete peers[peerId].tiles[streamId];
+}
+
+// ---------- controles ----------
+$('micBtn').onclick = () => toggleTrack('getAudioTracks', $('micBtn'), 'Microfone');
+$('camBtn').onclick = () => toggleTrack('getVideoTracks', $('camBtn'), 'Câmera');
+function toggleTrack(getter, btn, nome) {
+  if (!localStream) return;
+  const tracks = localStream[getter]();
+  const on = !tracks.every(t => t.enabled);
+  tracks.forEach(t => t.enabled = on);
+  btn.classList.toggle('off', !on);
+  btn.textContent = on ? nome : nome + ' desligado';
+}
+
+$('shareBtn').onclick = () => (screenStream ? stopShare() : startShare());
+
+async function startShare() {
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30 } }, audio: true });
+  } catch { return; }
+  const vt = screenStream.getVideoTracks()[0];
+  vt.contentHint = 'detail';
+  vt.onended = stopShare; // botão "parar de compartilhar" do navegador
+  Object.values(peers).forEach(addScreenTo);
+  send({ type: 'screen', streamId: screenStream.id });
+  addTile('me', screenStream.id, screenStream, { local: true, label: 'Sua tela' });
+  document.getElementById('me:' + screenStream.id).classList.add('screen');
+  $('shareBtn').setAttribute('aria-pressed', 'true');
+  $('shareBtn').textContent = 'Parar de compartilhar';
+}
+
+function addScreenTo(p) {
+  p.screenSenders = screenStream.getTracks().map(t => p.pc.addTrack(t, screenStream));
+  p.screenSenders.forEach(async (s) => {
+    if (s.track.kind !== 'video') return;
+    try {
+      const params = s.getParameters();
+      params.encodings = params.encodings && params.encodings.length ? params.encodings : [{}];
+      params.encodings[0].maxBitrate = 4_000_000;
+      await s.setParameters(params);
+    } catch {}
+  });
+}
+
+function stopShare() {
+  if (!screenStream) return;
+  const id = screenStream.id;
+  screenStream.getTracks().forEach(t => { t.onended = null; t.stop(); });
+  Object.values(peers).forEach(p => {
+    p.screenSenders.forEach(s => { try { p.pc.removeTrack(s); } catch {} });
+    p.screenSenders = [];
+  });
+  send({ type: 'screen', streamId: null });
+  removeTile('me', id);
+  screenStream = null;
+  $('shareBtn').setAttribute('aria-pressed', 'false');
+  $('shareBtn').textContent = 'Compartilhar tela';
+}
+
+$('leaveBtn').onclick = () => {
+  if (screenStream) screenStream.getTracks().forEach(t => t.stop());
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  Object.values(peers).forEach(p => p.pc.close());
+  ws && ws.close();
+  location.reload();
+};
+
+$('invite').onclick = async () => {
+  try { await navigator.clipboard.writeText(location.href); $('invite').textContent = 'Link copiado'; }
+  catch { prompt('Copie o link:', location.href); }
+  setTimeout(() => $('invite').textContent = 'Copiar link de convite', 2000);
+};
+</script>
+</body>
+</html>
