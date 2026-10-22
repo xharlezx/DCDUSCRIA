@@ -48,6 +48,31 @@
   footer button.off { background: #3a2128; border-color: var(--danger); }
   footer button.leave { background: var(--danger); border-color: var(--danger); color: #fff; }
   footer button:disabled { opacity: .4; cursor: not-allowed; }
+
+  #stage { display: flex; min-height: 0; }
+  #stage #grid { flex: 1; min-width: 0; }
+  #panel { width: 300px; border-left: 1px solid var(--line); display: none; flex-direction: column; background: var(--surface); }
+  #panel.open { display: flex; }
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; background: none; border: 0; padding: 12px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .pane { display: none; flex: 1; min-height: 0; flex-direction: column; padding: 12px; gap: 10px; }
+  .pane.on { display: flex; }
+  #msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .msg { background: var(--bg); border-radius: 10px; padding: 8px 10px; max-width: 92%; overflow-wrap: anywhere; }
+  .msg b { display: block; font-size: .78rem; color: var(--accent); }
+  .msg.mine { align-self: flex-end; background: #2a3166; }
+  .msg.mine b { color: var(--muted); }
+  #chatForm { display: flex; gap: 8px; }
+  #chatForm input { flex: 1; min-width: 0; }
+  #chatForm button { background: var(--accent); color: #12141c; border: 0; border-radius: 10px; padding: 0 14px; font-weight: 600; cursor: pointer; }
+  #fx { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #fx button { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; cursor: pointer; transition: transform .12s; }
+  #fx button:active { transform: scale(.96); }
+  #fx button[aria-pressed="true"] { border-color: var(--accent); background: #2a3166; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 0; }
+  #badge { color: var(--danger); }
+  @media (max-width: 760px) { #panel.open { position: fixed; inset: auto 0 64px 0; height: 55%; width: auto; border: 1px solid var(--line); border-radius: 14px 14px 0 0; z-index: 5; } }
 </style>
 </head>
 <body>
@@ -71,11 +96,28 @@
     <div><strong id="roomTitle"></strong> <span id="count"></span></div>
     <button class="link" id="invite">Copiar link de convite</button>
   </header>
-  <div id="grid"></div>
+  <div id="stage">
+    <div id="grid"></div>
+    <aside id="panel">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-tab="chat">Chat</button>
+        <button role="tab" aria-selected="false" data-tab="efeitos">Efeitos</button>
+      </div>
+      <div class="pane on" id="pane-chat">
+        <div id="msgs" aria-live="polite"></div>
+        <form id="chatForm"><input id="chatInput" maxlength="500" placeholder="Escreva uma mensagem" autocomplete="off"><button>Enviar</button></form>
+      </div>
+      <div class="pane" id="pane-efeitos">
+        <p class="hint" id="fxHint">Os amigos veem a imagem com o efeito.</p>
+        <div id="fx"></div>
+      </div>
+    </aside>
+  </div>
   <footer>
     <button id="micBtn" aria-pressed="false">Microfone</button>
     <button id="camBtn" aria-pressed="false">Câmera</button>
     <button id="shareBtn" aria-pressed="false">Compartilhar tela</button>
+    <button id="panelBtn" aria-pressed="false">Chat e efeitos <span id="badge" hidden>●</span></button>
     <button id="leaveBtn" class="leave">Sair</button>
   </footer>
 </section>
@@ -114,6 +156,7 @@ async function getLocalMedia() {
   for (const c of tries) {
     try { localStream = await navigator.mediaDevices.getUserMedia(c); break; } catch {}
   }
+  if (localStream) { rawStream = localStream; localStream = buildPipeline(rawStream); }
   if (!localStream) { $('micBtn').disabled = true; $('camBtn').disabled = true; }
   else if (!localStream.getVideoTracks().length) $('camBtn').disabled = true;
 }
@@ -132,6 +175,7 @@ function connect(room, code) {
     }
     else if (msg.type === 'peer-joined') makePeer(msg.id, msg.name);
     else if (msg.type === 'peer-left') closePeer(msg.id);
+    else if (msg.type === 'chat') { addMsg(peers[msg.from] ? peers[msg.from].name : 'Alguém', msg.text, false); notifyChat(); }
     else if (msg.type === 'signal') handleSignal(msg.from, msg.data);
     else if (msg.type === 'screen') {
       const p = peers[msg.from];
@@ -321,9 +365,70 @@ function stopShare() {
   $('shareBtn').textContent = 'Compartilhar tela';
 }
 
+// ---------- efeitos de câmera (canvas) ----------
+let rawStream = null, effectFilter = 'none';
+const EFFECTS = { Normal: 'none', 'Preto e branco': 'grayscale(1)', Sépia: 'sepia(1)', Desfoque: 'blur(6px)',
+  Brilho: 'brightness(1.35)', Contraste: 'contrast(1.5)', Vívido: 'saturate(1.8) contrast(1.1)', Invertido: 'invert(1)' };
+const fxOk = 'filter' in CanvasRenderingContext2D.prototype && !!HTMLCanvasElement.prototype.captureStream;
+
+function buildPipeline(raw) {
+  const vt = raw.getVideoTracks()[0];
+  if (!vt || !fxOk) return raw;
+  const v = document.createElement('video');
+  v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([vt]); v.play();
+  const c = document.createElement('canvas'), ctx = c.getContext('2d');
+  const st = vt.getSettings(); c.width = st.width || 1280; c.height = st.height || 720;
+  setInterval(() => { if (v.readyState >= 2) { ctx.filter = effectFilter; ctx.drawImage(v, 0, 0, c.width, c.height); } }, 33);
+  return new MediaStream([...raw.getAudioTracks(), c.captureStream(30).getVideoTracks()[0]]);
+}
+
+Object.entries(EFFECTS).forEach(([nome, css]) => {
+  const b = document.createElement('button');
+  b.textContent = nome; b.setAttribute('aria-pressed', String(css === 'none'));
+  b.onclick = () => {
+    effectFilter = css;
+    [...$('fx').children].forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  };
+  $('fx').append(b);
+});
+function checkFx() {
+  if (!fxOk) $('fxHint').textContent = 'Seu navegador não suporta efeitos. Use Chrome, Edge ou Firefox.';
+  else if (!localStream || !localStream.getVideoTracks().length) $('fxHint').textContent = 'Ligue uma câmera para usar os efeitos.';
+  else return;
+  [...$('fx').children].forEach(b => b.disabled = true);
+}
+
+// ---------- chat e painel ----------
+$('panelBtn').onclick = () => {
+  const open = $('panel').classList.toggle('open');
+  $('panelBtn').setAttribute('aria-pressed', String(open));
+  checkFx(); notifyChat(true);
+};
+document.querySelectorAll('.tabs button').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x === t)));
+  $('pane-chat').classList.toggle('on', t.dataset.tab === 'chat');
+  $('pane-efeitos').classList.toggle('on', t.dataset.tab === 'efeitos');
+  notifyChat(true);
+});
+function chatVisible() { return $('panel').classList.contains('open') && $('pane-chat').classList.contains('on'); }
+function notifyChat(clear) { $('badge').hidden = clear === true || chatVisible(); }
+function addMsg(who, text, mine) {
+  const m = document.createElement('div'); m.className = 'msg' + (mine ? ' mine' : '');
+  const b = document.createElement('b'); b.textContent = who;
+  m.append(b, document.createTextNode(text));
+  $('msgs').append(m); $('msgs').scrollTop = $('msgs').scrollHeight;
+}
+$('chatForm').onsubmit = (e) => {
+  e.preventDefault();
+  const t = $('chatInput').value.trim();
+  if (!t) return;
+  send({ type: 'chat', text: t }); addMsg(myName, t, true); $('chatInput').value = '';
+};
+
 $('leaveBtn').onclick = () => {
   if (screenStream) screenStream.getTracks().forEach(t => t.stop());
   if (localStream) localStream.getTracks().forEach(t => t.stop());
+  if (rawStream) rawStream.getTracks().forEach(t => t.stop());
   Object.values(peers).forEach(p => p.pc.close());
   ws && ws.close();
   location.reload();
