@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quintal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root { --bg:#0f1a1f; --side:#0b1317; --surface:#17262d; --line:#243842; --text:#eef3ef; --muted:#8fa5ab; --accent:#f2c14e; --danger:#ff6b5e; --ok:#6fd4a3; }
   * { box-sizing: border-box; }
@@ -21,7 +23,7 @@
   #join p { margin: 0; color: var(--muted); }
   label { display: grid; gap: 6px; color: var(--muted); font-size: .9rem; }
   input { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
-  .primary { background: var(--accent); color: #1b1608; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; }
+  .primary { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 13px; font-weight: 700; }
   #err { color: var(--danger); min-height: 1.4em; }
 
   #app { display: none; height: 100%; grid-template-columns: 250px 1fr; }
@@ -44,7 +46,7 @@
   .ctl { display: flex; gap: 6px; flex-wrap: wrap; }
   .ctl button { flex: 1; min-width: 38px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 0; transition: transform .1s; }
   .ctl button:active { transform: scale(.94); }
-  .ctl button[aria-pressed="true"] { background: var(--accent); color: #1b1608; border-color: var(--accent); }
+  .ctl button[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: var(--accent); }
   .ctl button.off { background: #3b1f1d; border-color: var(--danger); }
   .ctl .leave { background: var(--danger); border-color: var(--danger); color: #fff; }
   .me { padding: 8px; color: var(--muted); font-size: .9rem; }
@@ -60,7 +62,7 @@
   .empty { color: var(--muted); margin: auto; text-align: center; }
   #chatForm { display: flex; padding: 12px 18px 18px; gap: 8px; }
   #chatForm input { flex: 1; border-radius: 12px; }
-  #chatForm button { background: var(--accent); color: #1b1608; border: 0; border-radius: 12px; padding: 0 18px; font-weight: 700; }
+  #chatForm button { background: var(--accent); color: #fff; border: 0; border-radius: 12px; padding: 0 18px; font-weight: 700; }
 
   #voiceCta { margin: auto; text-align: center; display: grid; gap: 12px; justify-items: center; padding: 24px; }
   #voiceCta p { color: var(--muted); margin: 0; max-width: 34ch; }
@@ -116,7 +118,7 @@
   .pc button { background: none; border: 0; font-size: 1.15rem; padding: 6px 10px; border-radius: 50%; transition: transform .1s; }
   .pc button:active { transform: scale(.9); }
   .pc button[aria-pressed="true"] { color: var(--accent); }
-  .pc .big { background: var(--accent); color: #1b1608; width: 44px; height: 44px; padding: 0; }
+  .pc .big { background: var(--accent); color: #fff; width: 44px; height: 44px; padding: 0; }
   .seek { display: flex; align-items: center; gap: 10px; font-size: .8rem; color: var(--muted); }
   .vol { display: flex; align-items: center; gap: 8px; } .bc { font-size: .82rem; color: var(--muted); display: flex; gap: 6px; align-items: center; margin-top: 6px; }
   .bc input { padding: 0; width: auto; }
@@ -126,6 +128,66 @@
   #mini button { background: none; border: 0; }
   #sbVol { width: 90px; }
   @media (max-width: 760px) { #player { grid-template-columns: 1fr; gap: 8px; } }
+  /* ===== Estilo vidro (glassmorphism) ===== */
+  :root { --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --text: #f5f5f7; --muted: #a1a1a8; --surface: rgba(255,255,255,.08); --line: rgba(255,255,255,.1); --stroke: rgba(255,255,255,.14); --glass: rgba(255,255,255,.07); }
+  body { font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif; letter-spacing: -.011em; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(55% 45% at 12% 8%, rgba(10,132,255,.40), transparent 65%), radial-gradient(45% 40% at 92% 92%, rgba(48,209,88,.30), transparent 65%), radial-gradient(40% 35% at 88% 8%, rgba(94,92,230,.28), transparent 65%), #05070a; background-attachment: fixed; }
+  #app { padding: 14px; gap: 14px; }
+  #side, #app main, #join form { background: var(--glass); border: 1px solid var(--stroke); border-radius: 30px; -webkit-backdrop-filter: blur(28px) saturate(170%); backdrop-filter: blur(28px) saturate(170%); box-shadow: 0 20px 60px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.1); }
+  #join form { padding: 32px; }
+  #join h1 { font-size: 3rem; background: linear-gradient(90deg, #fff, #7cb8ff 60%, #5de08a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .brand { font-size: 1.5rem; background: linear-gradient(90deg, #fff, #9ec5ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .top { padding: 16px 22px; font-size: 1.1rem; }
+  button svg { width: 18px; height: 18px; flex: none; }
+  .ch { border-radius: 14px; padding: 9px 12px; }
+  .ch:hover { background: rgba(255,255,255,.08); }
+  .ch.on { background: rgba(10,132,255,.28); box-shadow: inset 0 0 0 1px rgba(10,132,255,.55); color: #fff; }
+  .who::before { box-shadow: 0 0 8px var(--ok); }
+  input:not([type=range]):not([type=checkbox]) { background: rgba(255,255,255,.07); border: 1px solid var(--stroke); border-radius: 16px; padding: 12px 16px; transition: box-shadow .15s, border-color .15s; }
+  input:not([type=range]):not([type=checkbox]):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px rgba(10,132,255,.25); }
+  .primary, #chatForm button { background: linear-gradient(180deg, #3d9bff, #0a84ff); color: #fff; border-radius: 999px; box-shadow: 0 8px 24px rgba(10,132,255,.45); transition: transform .15s, box-shadow .15s; }
+  .primary:hover, #chatForm button:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(10,132,255,.55); }
+  .primary:active, #chatForm button:active { transform: scale(.97); }
+  #chatForm { padding: 12px 20px 20px; } #chatForm input { border-radius: 999px; }
+  #msgs { padding: 16px 22px; }
+  .msg { background: rgba(255,255,255,.07); border-radius: 18px; padding: 10px 14px; align-self: flex-start; max-width: min(720px, 92%); }
+  .msg b { color: #7cb8ff; }
+  .tile { border-radius: 26px; border: 1px solid var(--stroke); box-shadow: 0 12px 40px rgba(0,0,0,.4); }
+  .tile .name { background: rgba(20,22,28,.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border: 1px solid var(--stroke); }
+  .tile .avatar { background: linear-gradient(135deg, rgba(10,132,255,.4), rgba(48,209,88,.28)); color: #fff; }
+  @keyframes pop { from { opacity: 0; transform: scale(.96) translateY(6px); } }
+  .tile, .msg, .trk { animation: pop .3s cubic-bezier(.2,.8,.2,1); }
+  #voiceBar { background: rgba(255,255,255,.07); border: 1px solid var(--stroke); border-radius: 22px; }
+  #voiceBar small { text-shadow: 0 0 12px rgba(48,209,88,.8); }
+  .ctl { justify-content: space-between; gap: 8px; }
+  .ctl button { width: 40px; height: 40px; flex: none; min-width: 0; padding: 0; display: grid; place-items: center; border-radius: 50%; background: rgba(255,255,255,.1); border: 0; color: var(--text); }
+  .ctl button.off { background: rgba(255,69,58,.28); color: #ff8a82; }
+  .ctl button[aria-pressed="true"] { background: var(--accent); color: #fff; box-shadow: 0 0 18px rgba(10,132,255,.65); }
+  .ctl .leave { background: var(--danger); color: #fff; }
+  #mini { background: rgba(255,255,255,.08); border: 1px solid var(--stroke); border-radius: 14px; }
+  #dock { margin: 0 14px 14px; border: 1px solid var(--stroke); border-radius: 24px; background: rgba(255,255,255,.06); }
+  .dockTabs button, #fx button { display: inline-flex; gap: 6px; align-items: center; background: rgba(255,255,255,.08); border: 1px solid var(--stroke); }
+  .dockTabs button[aria-pressed="true"], #fx button[aria-pressed="true"] { background: rgba(10,132,255,.3); border-color: rgba(10,132,255,.6); color: #fff; }
+  #sb button, #sb label { border-radius: 20px; background: rgba(255,255,255,.07); border: 1px solid var(--stroke); }
+  #sb button:hover, #sb label:hover { border-color: rgba(10,132,255,.7); box-shadow: 0 0 18px rgba(10,132,255,.25); }
+  #plHead { padding: 20px 22px 8px; } #plHead h2 { font-size: 1.7rem; letter-spacing: -.03em; }
+  .tmain { border-radius: 14px; } .tmain:hover { background: rgba(255,255,255,.07); }
+  #player { margin: 0 14px 14px; border: 1px solid var(--stroke); border-radius: 26px; background: rgba(255,255,255,.07); }
+  .pc button { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: var(--text); }
+  .pc button svg { width: 18px; height: 18px; }
+  .pc button[aria-pressed="true"] { color: var(--accent); }
+  .pc sup { font-size: .6rem; margin-left: -4px; }
+  .pc .big { background: #fff; color: #000; width: 46px; height: 46px; box-shadow: 0 6px 22px rgba(255,255,255,.25); }
+  .pc .big svg { width: 22px; height: 22px; }
+  #miniPlay { display: grid; place-items: center; color: var(--text); }
+  input[type=range] { -webkit-appearance: none; appearance: none; height: 24px; --p: 0%; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 5px; border-radius: 5px; background: linear-gradient(90deg, var(--accent) var(--p), rgba(255,255,255,.2) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; margin-top: -5.5px; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+  input[type=range]::-moz-range-track { height: 5px; border-radius: 5px; background: rgba(255,255,255,.2); }
+  input[type=range]::-moz-range-progress { height: 5px; border-radius: 5px; background: var(--accent); }
+  input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; }
+  @media (max-width: 760px) { #app { padding: 8px; gap: 8px; } #dock, #player { margin: 0 8px 8px; } }
+  @media (prefers-reduced-motion: reduce) { .tile, .msg, .trk { animation: none; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -148,21 +210,21 @@
     <div class="sec">Canais de texto <button id="addCh" title="Criar canal" aria-label="Criar canal">+</button></div>
     <ul id="chList"></ul>
     <div class="sec">Voz</div>
-    <button class="ch" id="voiceCh">🔊 Sala de voz</button>
+    <button class="ch" id="voiceCh" data-ic="volume">Sala de voz</button>
     <ul id="voiceMembers"></ul>
     <div class="sec">Música</div>
-    <button class="ch" id="musicCh">🎵 Player de músicas</button>
-    <div id="mini" hidden><span id="miniTitle"></span><button id="miniPlay" aria-label="Tocar ou pausar">▶</button></div>
+    <button class="ch" id="musicCh" data-ic="music">Player de músicas</button>
+    <div id="mini" hidden><span id="miniTitle"></span><button id="miniPlay" aria-label="Tocar ou pausar" data-ic="play"></button></div>
     <div class="sec">Online</div>
     <ul id="onlineList"></ul>
     <div class="spacer"></div>
     <div id="voiceBar" hidden>
       <small>● Voz conectada</small>
       <div class="ctl">
-        <button id="micBtn" title="Microfone" aria-label="Microfone">🎤</button>
-        <button id="camBtn" title="Câmera" aria-label="Câmera">📷</button>
-        <button id="shareBtn" aria-pressed="false" title="Compartilhar tela" aria-label="Compartilhar tela">🖥️</button>
-        <button id="leaveBtn" class="leave" title="Sair da voz" aria-label="Sair da voz">✕</button>
+        <button id="micBtn" title="Microfone" data-ic="mic" aria-label="Microfone"></button>
+        <button id="camBtn" title="Câmera" data-ic="camera" aria-label="Câmera"></button>
+        <button id="shareBtn" aria-pressed="false" title="Compartilhar tela" data-ic="screen" aria-label="Compartilhar tela"></button>
+        <button id="leaveBtn" class="leave" title="Sair da voz" data-ic="leave" aria-label="Sair da voz"></button>
       </div>
     </div>
     <button class="ch" id="soundBtn"></button>
@@ -170,7 +232,7 @@
   </nav>
 
   <main>
-    <div class="top"><button id="menuBtn" aria-label="Abrir menu">☰</button><span id="title"></span></div>
+    <div class="top"><button id="menuBtn" data-ic="menu" aria-label="Abrir menu"></button><span id="title"></span></div>
     <section id="textView">
       <div id="msgs" aria-live="polite"></div>
       <form id="chatForm"><input id="chatInput" maxlength="500" autocomplete="off"><button>Enviar</button></form>
@@ -185,14 +247,14 @@
         <div class="np"><b id="npTitle">Nada tocando</b><small id="npSub">Adicione músicas para começar</small></div>
         <div class="mid">
           <div class="pc">
-            <button id="shuf" aria-pressed="false" title="Aleatório">🔀</button><button id="prev" title="Anterior">⏮</button>
-            <button id="play" class="big" title="Tocar ou pausar">▶</button><button id="next" title="Próxima">⏭</button>
-            <button id="rep" aria-pressed="false" title="Repetir">🔁</button>
+            <button id="shuf" aria-pressed="false" title="Aleatório" data-ic="shuffle"></button><button id="prev" title="Anterior" data-ic="prev"></button>
+            <button id="play" class="big" title="Tocar ou pausar" data-ic="play"></button><button id="next" title="Próxima" data-ic="next"></button>
+            <button id="rep" aria-pressed="false" title="Repetir" data-ic="repeat"></button>
           </div>
           <div class="seek"><span id="tcur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0" aria-label="Progresso"><span id="tdur">0:00</span></div>
         </div>
         <div>
-          <div class="vol"><span>🔈</span><input type="range" id="vol" min="0" max="100" value="80" aria-label="Volume da música"></div>
+          <div class="vol"><span data-ic="volume"></span><input type="range" id="vol" min="0" max="100" value="80" aria-label="Volume da música"></div>
           <label class="bc"><input type="checkbox" id="bcast"> Transmitir para a call (use fone de ouvido)</label>
         </div>
       </div>
@@ -207,8 +269,8 @@
       <div id="grid" hidden></div>
       <div id="dock" hidden>
         <div class="dockTabs">
-          <button data-p="fx" aria-pressed="false">✨ Efeitos</button>
-          <button data-p="sb" aria-pressed="false">🎵 Sons</button>
+          <button data-p="fx" aria-pressed="false" data-ic="sparkles">Efeitos</button>
+          <button data-p="sb" aria-pressed="false" data-ic="music">Sons</button>
           <span class="grow"></span>
           <input type="range" id="sbVol" min="0" max="100" value="100" title="Volume dos sons e músicas que chegam da call" aria-label="Volume dos sons da call">
           <button id="sbMute" aria-pressed="false" title="Silenciar os sons da call, os seus e os dos outros (só para você)"></button>
@@ -633,15 +695,37 @@ $('play').onclick = $('miniPlay').onclick = togglePlay;
 $('next').onclick = () => step(1, false);
 $('prev').onclick = () => (aud.currentTime > 3 ? (aud.currentTime = 0) : step(-1, false));
 $('shuf').onclick = () => { shuffleOn = !shuffleOn; $('shuf').setAttribute('aria-pressed', String(shuffleOn)); };
-$('rep').onclick = () => { repMode = (repMode + 1) % 3; $('rep').textContent = repMode === 2 ? '🔂' : '🔁'; $('rep').setAttribute('aria-pressed', String(repMode > 0)); };
+$('rep').onclick = () => { repMode = (repMode + 1) % 3; $('rep').innerHTML = ic('repeat') + (repMode === 2 ? '<sup>1</sup>' : ''); $('rep').setAttribute('aria-pressed', String(repMode > 0)); };
 aud.onended = () => (repMode === 2 ? (aud.currentTime = 0, aud.play()) : step(1, true));
-aud.onplay = aud.onpause = () => { $('play').textContent = $('miniPlay').textContent = aud.paused ? '▶' : '⏸'; renderPl(); };
+aud.onplay = aud.onpause = () => { $('play').innerHTML = $('miniPlay').innerHTML = ic(aud.paused ? 'play' : 'pause'); renderPl(); };
 aud.onloadedmetadata = () => { $('tdur').textContent = fmt(aud.duration); };
 let seeking = false;
-aud.ontimeupdate = () => { $('tcur').textContent = fmt(aud.currentTime); if (!seeking && aud.duration) $('seek').value = aud.currentTime / aud.duration * 1000; };
+aud.ontimeupdate = () => { $('tcur').textContent = fmt(aud.currentTime); if (!seeking && aud.duration) { $('seek').value = aud.currentTime / aud.duration * 1000; paintRange($('seek')); } };
 $('seek').onpointerdown = () => seeking = true;
 $('seek').onchange = () => { seeking = false; if (aud.duration) aud.currentTime = $('seek').value / 1000 * aud.duration; };
 renderPl();
+
+// ---------- ícones (estilo SF Symbols) e sliders ----------
+const IC = {
+  mic: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/>',
+  camera: '<rect x="2.5" y="6" width="13" height="12" rx="3"/><path d="M15.5 10.5l6-3.5v10l-6-3.5"/>',
+  screen: '<rect x="3" y="4" width="18" height="12" rx="2.5"/><path d="M8 20h8M12 16v4"/>',
+  leave: '<path d="M6 6l12 12M18 6L6 18"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  music: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+  volume: '<path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  sparkles: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  play: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/>',
+  pause: '<rect x="6.5" y="5" width="4" height="14" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.5" y="5" width="4" height="14" rx="1.3" fill="currentColor" stroke="none"/>',
+  prev: '<path d="M6.5 5v14"/><path d="M19 5.5v13l-9.5-6.5z" fill="currentColor"/>',
+  next: '<path d="M17.5 5v14"/><path d="M5 5.5v13l9.5-6.5z" fill="currentColor"/>',
+  shuffle: '<path d="M3 7h3.5c2 0 3.2 1 4.3 2.7l2.4 3.6c1.1 1.7 2.3 2.7 4.3 2.7H21M3 17h3.5c2 0 3.2-1 4.3-2.7M13.2 9.7c1.1-1.7 2.3-2.7 4.3-2.7H21"/><path d="M18.5 4.5L21 7l-2.5 2.5M18.5 14.5L21 17l-2.5 2.5"/>',
+  repeat: '<path d="M17 3l3 3-3 3"/><path d="M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3"/><path d="M20 13v2a3 3 0 0 1-3 3H4"/>',
+};
+const ic = (n) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + IC[n] + '</svg>';
+document.querySelectorAll('[data-ic]').forEach(el => el.insertAdjacentHTML('afterbegin', ic(el.dataset.ic)));
+const paintRange = (r) => r.style.setProperty('--p', (r.value - r.min) / (r.max - r.min) * 100 + '%');
+document.querySelectorAll('input[type=range]').forEach(r => { paintRange(r); r.addEventListener('input', () => paintRange(r)); });
 </script>
 </body>
 </html>
